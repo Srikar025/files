@@ -8,6 +8,7 @@ from kolam_generator import KolamGenerator, get_available_patterns
 from kolam_recognition import KolamRecognizer, create_analysis_visualization
 from kolam_editor import KolamEditor
 from gemini_integration import GeminiKolamAnalyzer, display_gemini_analysis, create_learning_interface
+from ai_kolam_generator import create_ai_generator_interface
 from config import GEMINI_API_KEY, get_gemini_api_key
 
 # Page configuration
@@ -66,9 +67,10 @@ def main():
         [
             "🏠 Home",
             "🎲 Kolam Generator", 
+            "🤖 AI Kolam Creator",
             "📷 Upload & Recognition",
             "✏️ Interactive Editor",
-            "🤖 AI Analysis",
+            "🧠 AI Analysis",
             "📚 Learn About Kolam",
             "⚙️ Settings"
         ]
@@ -87,11 +89,13 @@ def main():
         show_home_page()
     elif page == "🎲 Kolam Generator":
         show_generator_page()
+    elif page == "🤖 AI Kolam Creator":
+        show_ai_generator_page()
     elif page == "📷 Upload & Recognition":
         show_recognition_page()
     elif page == "✏️ Interactive Editor":
         show_editor_page()
-    elif page == "🤖 AI Analysis":
+    elif page == "🧠 AI Analysis":
         show_ai_analysis_page()
     elif page == "📚 Learn About Kolam":
         show_learning_page()
@@ -120,6 +124,11 @@ def show_home_page():
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('<div class="feature-card">', unsafe_allow_html=True)
+        st.markdown("### 🤖 AI Kolam Creator")
+        st.write("Describe your dream Kolam in words, and AI will generate it for you! Use natural language prompts to create unique patterns.")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown('<div class="feature-card">', unsafe_allow_html=True)
         st.markdown("### 📷 Upload & Recognition")
         st.write("Upload images of Kolam designs and use AI to analyze their patterns, symmetry, and cultural significance.")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -131,18 +140,24 @@ def show_home_page():
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('<div class="feature-card">', unsafe_allow_html=True)
-        st.markdown("### 🤖 AI Analysis")
+        st.markdown("### 🧠 AI Analysis")
         st.write("Get detailed AI-powered analysis of your Kolam designs using Google's Gemini API for pattern recognition and cultural insights.")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown('<div class="feature-card">', unsafe_allow_html=True)
+        st.markdown("### 📚 Learn About Kolam")
+        st.write("Discover the rich history, cultural significance, and mathematical principles behind traditional Kolam art.")
         st.markdown('</div>', unsafe_allow_html=True)
     
     # Quick start guide
     st.markdown('<div class="sub-header">🚀 Quick Start Guide</div>', unsafe_allow_html=True)
     st.write("""
     1. **Start with Generator**: Try the Kolam Generator to see different pattern types
-    2. **Experiment with Editor**: Use the Interactive Editor to create your own designs
-    3. **Upload & Analyze**: Upload Kolam images to get AI-powered analysis
-    4. **Learn**: Explore the educational content about Kolam traditions
-    5. **Settings**: Configure your API keys and preferences
+    2. **Try AI Creator**: Describe your dream Kolam and let AI generate it
+    3. **Experiment with Editor**: Use the Interactive Editor to create your own designs
+    4. **Upload & Analyze**: Upload Kolam images to get AI-powered analysis
+    5. **Learn**: Explore the educational content about Kolam traditions
+    6. **Settings**: Configure your API keys and preferences
     """)
 
 def show_generator_page():
@@ -215,6 +230,13 @@ def show_generator_page():
     
     for pattern, description in pattern_descriptions.items():
         st.write(f"**{pattern.replace('_', ' ').title()}:** {description}")
+
+def show_ai_generator_page():
+    """Display the AI Kolam generator page"""
+    st.markdown('<div class="sub-header">🤖 AI Kolam Creator</div>', unsafe_allow_html=True)
+    
+    # Show the AI generator interface
+    create_ai_generator_interface()
 
 def show_recognition_page():
     """Display the upload and recognition page"""

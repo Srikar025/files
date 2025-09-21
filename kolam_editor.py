@@ -20,6 +20,18 @@ class KolamEditor:
         """Create the main editor interface"""
         st.subheader("🎨 Interactive Kolam Editor")
         
+        # Check if pattern was passed from AI generator
+        if 'editor_pattern' in st.session_state:
+            pattern_data = st.session_state['editor_pattern']
+            st.success("🎉 AI-generated pattern loaded! You can now edit it.")
+            
+            # Load the pattern
+            self.dots = pattern_data.get('dots', [])
+            self.connections = pattern_data.get('connections', [])
+            
+            # Clear the session state
+            del st.session_state['editor_pattern']
+        
         col1, col2 = st.columns([2, 1])
         
         with col1:
