@@ -9,6 +9,7 @@ import math
 import re
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
+from config import get_gemini_api_key
 
 @dataclass
 class KolamPattern:
@@ -26,11 +27,20 @@ class EnhancedKolamGenerator:
     """Enhanced AI-powered Kolam generator with mathematical precision"""
     
     def __init__(self, api_key: Optional[str] = None):
-        if api_key:
-            genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
+        # Use provided API key or get from config
+        self.api_key = api_key or get_gemini_api_key()
+        
+        if self.api_key:
+            try:
+                genai.configure(api_key=self.api_key)
+                self.model = genai.GenerativeModel('gemini-1.5-flash')
+                st.success("✅ AI guidance enabled with Gemini API")
+            except Exception as e:
+                self.model = None
+                st.error(f"❌ Failed to initialize Gemini API: {str(e)}")
         else:
             self.model = None
+            st.info("ℹ️ AI guidance disabled - API key not provided")
         
         # Traditional Kolam pattern templates
         self.pattern_templates = {
@@ -134,33 +144,97 @@ class EnhancedKolamGenerator:
         
         return analysis
     
+    def _validate_ai_guidance(self, guidance: Dict) -> Dict:
+        """Validate and sanitize AI guidance"""
+        valid_patterns = ['flower', 'lotus', 'star', 'diamond', 'spiral', 'mandala', 'geometric', 'traditional']
+        valid_symmetries = ['rotational', 'bilateral', 'point', 'radial']
+        
+        # Ensure valid pattern type
+        if guidance.get('pattern_type') not in valid_patterns:
+            guidance['pattern_type'] = 'flower'
+        
+        # Ensure valid symmetry type
+        if guidance.get('symmetry_type') not in valid_symmetries:
+            guidance['symmetry_type'] = 'rotational'
+        
+        # Ensure complexity is in valid range
+        complexity = guidance.get('complexity', 5)
+        if not isinstance(complexity, int) or complexity < 1 or complexity > 9:
+            guidance['complexity'] = 5
+        
+        # Ensure count is reasonable
+        count = guidance.get('suggested_count', 8)
+        if not isinstance(count, int) or count < 3 or count > 16:
+            guidance['suggested_count'] = 8
+        
+        # Ensure lists exist
+        if not isinstance(guidance.get('key_elements'), list):
+            guidance['key_elements'] = ['center', 'symmetry', 'balance']
+        
+        if not isinstance(guidance.get('drawing_instructions'), list):
+            guidance['drawing_instructions'] = ['Start from center', 'Create symmetric elements', 'Connect with flowing lines']
+        
+        return guidance
+    
     def _get_ai_guidance(self, prompt: str, grid_size: int) -> Dict:
         """Get AI guidance for pattern creation"""
         system_prompt = f"""
-        As a Kolam art expert, analyze this request: "{prompt}"
+        As a traditional Tamil Kolam art expert, analyze this request: "{prompt}"
         
-        Provide guidance in this JSON format:
+        Consider these aspects:
+        - Traditional Kolam principles (Pulli, Sikku, Kambi styles)
+        - Mathematical symmetry and geometric precision
+        - Cultural and spiritual significance
+        - Grid size constraints ({grid_size}x{grid_size})
+        
+        Provide guidance in this EXACT JSON format:
         {{
-            "pattern_type": "flower/lotus/star/diamond/spiral/mandala/geometric",
-            "symmetry_type": "rotational/bilateral/point/radial",
-            "complexity": 1-9,
-            "key_elements": ["element1", "element2"],
-            "cultural_context": "brief description",
-            "mathematical_properties": ["property1", "property2"],
-            "suggested_count": number_of_petals_or_points,
-            "drawing_instructions": ["step1", "step2", "step3"]
+            "pattern_type": "flower",
+            "symmetry_type": "rotational",
+            "complexity": 7,
+            "key_elements": ["center_dot", "petals", "connecting_lines"],
+            "cultural_context": "Traditional lotus symbolizing purity",
+            "mathematical_properties": ["8-fold_rotational_symmetry", "radial_balance"],
+            "suggested_count": 8,
+            "drawing_instructions": ["Place center dot", "Create 8 petal points", "Connect with flowing lines"],
+            "color_suggestions": ["crimson", "navy", "gold"],
+            "traditional_significance": "Represents prosperity and divine blessing"
         }}
         
-        Focus on mathematical precision and traditional Kolam principles.
+        Ensure pattern_type is one of: flower, lotus, star, diamond, spiral, mandala, geometric, traditional
+        Ensure symmetry_type is one of: rotational, bilateral, point, radial
+        Complexity should be 1-9 based on detail level.
         """
         
         try:
             response = self.model.generate_content(system_prompt)
-            json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
+            
+            # Try to extract JSON from response
+            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response.text, re.DOTALL)
             if json_match:
-                return json.loads(json_match.group(0))
-        except:
-            pass
+                json_str = json_match.group(0)
+                # Clean up the JSON string
+                json_str = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', json_str)  # Remove control characters
+                guidance = json.loads(json_str)
+                
+                # Validate and sanitize the guidance
+                guidance = self._validate_ai_guidance(guidance)
+                
+                # Display AI insights
+                with st.expander("🤖 AI Insights", expanded=True):
+                    st.write(f"**Cultural Context:** {guidance.get('cultural_context', 'Traditional Kolam pattern')}")
+                    st.write(f"**Traditional Significance:** {guidance.get('traditional_significance', 'Sacred geometric art')}")
+                    if guidance.get('drawing_instructions'):
+                        st.write("**Drawing Instructions:**")
+                        for i, instruction in enumerate(guidance['drawing_instructions'], 1):
+                            st.write(f"{i}. {instruction}")
+                
+                return guidance
+                
+        except json.JSONDecodeError as e:
+            st.warning(f"⚠️ AI response parsing failed: {str(e)}")
+        except Exception as e:
+            st.warning(f"⚠️ AI guidance failed: {str(e)}")
         
         return {}
     
@@ -175,16 +249,18 @@ class EnhancedKolamGenerator:
             return self._create_geometric_template(analysis, grid_size)
     
     def _create_flower_template(self, analysis: Dict, grid_size: int) -> KolamPattern:
-        """Create precise flower pattern"""
+        """Create precise flower pattern with enhanced connections"""
         center = grid_size // 2
-        petal_count = analysis.get('count', 8)
+        petal_count = analysis.get('suggested_count', analysis.get('count', 8))
         complexity = analysis.get('complexity', 5)
         
         dots = [(center, center)]  # Center dot
         connections = []
         
-        # Create petals
-        petal_radius = min(center - 1, 2 + complexity // 3)
+        # Create petals with better spacing
+        petal_radius = min(center - 1, max(2, 1 + complexity // 2))
+        petal_points = []
+        
         for i in range(petal_count):
             angle = 2 * math.pi * i / petal_count
             
@@ -193,33 +269,56 @@ class EnhancedKolamGenerator:
             y = center + int(petal_radius * math.sin(angle))
             
             if 0 <= x < grid_size and 0 <= y < grid_size:
+                petal_points.append((x, y))
                 dots.append((x, y))
                 connections.append(((center, center), (x, y)))
                 
-                # Add intermediate dots for complexity
+                # Add intermediate dots for higher complexity
                 if complexity > 5:
-                    mid_x = center + int((petal_radius * 0.6) * math.cos(angle))
-                    mid_y = center + int((petal_radius * 0.6) * math.sin(angle))
+                    mid_radius = petal_radius * 0.6
+                    mid_x = center + int(mid_radius * math.cos(angle))
+                    mid_y = center + int(mid_radius * math.sin(angle))
                     if 0 <= mid_x < grid_size and 0 <= mid_y < grid_size:
                         dots.append((mid_x, mid_y))
                         connections.append(((center, center), (mid_x, mid_y)))
                         connections.append(((mid_x, mid_y), (x, y)))
         
-        # Add connecting rings for higher complexity
+        # Create petal-to-petal connections for traditional look
+        if complexity > 3 and len(petal_points) > 2:
+            for i in range(len(petal_points)):
+                next_i = (i + 1) % len(petal_points)
+                # Create curved connection through intermediate points
+                if complexity > 6:
+                    # Add curved connections
+                    p1, p2 = petal_points[i], petal_points[next_i]
+                    mid_angle = math.atan2((p1[1] + p2[1])/2 - center, (p1[0] + p2[0])/2 - center)
+                    curve_radius = petal_radius * 0.8
+                    curve_x = center + int(curve_radius * math.cos(mid_angle))
+                    curve_y = center + int(curve_radius * math.sin(mid_angle))
+                    
+                    if 0 <= curve_x < grid_size and 0 <= curve_y < grid_size:
+                        curve_point = (curve_x, curve_y)
+                        if curve_point not in dots:
+                            dots.append(curve_point)
+                        connections.append((p1, curve_point))
+                        connections.append((curve_point, p2))
+        
+        # Add decorative ring for high complexity
         if complexity > 7:
-            ring_radius = petal_radius // 2
-            for i in range(petal_count):
-                angle = 2 * math.pi * i / petal_count
+            ring_radius = max(1, petal_radius // 2)
+            ring_points = []
+            for i in range(petal_count * 2):  # Double the points for finer detail
+                angle = 2 * math.pi * i / (petal_count * 2)
                 x = center + int(ring_radius * math.cos(angle))
                 y = center + int(ring_radius * math.sin(angle))
                 if 0 <= x < grid_size and 0 <= y < grid_size:
+                    ring_points.append((x, y))
                     dots.append((x, y))
-                    # Connect to adjacent ring points
-                    next_angle = 2 * math.pi * ((i + 1) % petal_count) / petal_count
-                    next_x = center + int(ring_radius * math.cos(next_angle))
-                    next_y = center + int(ring_radius * math.sin(next_angle))
-                    if 0 <= next_x < grid_size and 0 <= next_y < grid_size:
-                        connections.append(((x, y), (next_x, next_y)))
+            
+            # Connect ring points
+            for i in range(len(ring_points)):
+                next_i = (i + 1) % len(ring_points)
+                connections.append((ring_points[i], ring_points[next_i]))
         
         return KolamPattern(
             dots=list(set(dots)),
@@ -227,8 +326,8 @@ class EnhancedKolamGenerator:
             pattern_type="flower",
             symmetry=analysis.get('symmetry_type', 'rotational'),
             complexity=complexity,
-            description=f"Flower pattern with {petal_count} petals",
-            cultural_significance="Represents prosperity and natural beauty in Tamil culture",
+            description=f"Enhanced flower pattern with {petal_count} petals",
+            cultural_significance=analysis.get('cultural_context', "Represents prosperity and natural beauty in Tamil culture"),
             grid_size=grid_size
         )
     
@@ -511,45 +610,97 @@ class EnhancedKolamGenerator:
         """Create traditional Tamil Kolam pattern"""
         # This would implement traditional patterns like Pulli Kolam
         # For now, create a flower-based traditional pattern
+        # Use enhanced flower template with traditional elements
+        analysis['pattern_type'] = 'flower'
         return self._create_flower_template(analysis, grid_size)
     
     def visualize_pattern(self, pattern: KolamPattern, title: str = "Generated Kolam") -> plt.Figure:
-        """Visualize the generated Kolam pattern"""
-        fig, ax = plt.subplots(figsize=(10, 10))
+        """Enhanced visualization of the generated Kolam pattern"""
+        fig, ax = plt.subplots(figsize=(12, 12))
         
-        # Draw connections first
+        # Set background color
+        ax.set_facecolor('#fefefe')
+        fig.patch.set_facecolor('white')
+        
+        # Draw connections first with better styling
         for start, end in pattern.connections:
-            ax.plot([start[0], end[0]], [start[1], end[1]], 
-                   'crimson', linewidth=2.5, alpha=0.8, zorder=1)
+            # Create slightly curved lines for more organic look
+            if len(pattern.connections) > 10:  # For complex patterns
+                # Add slight curve to lines
+                mid_x = (start[0] + end[0]) / 2
+                mid_y = (start[1] + end[1]) / 2
+                
+                # Calculate perpendicular offset for curve
+                dx = end[0] - start[0]
+                dy = end[1] - start[1]
+                length = math.sqrt(dx*dx + dy*dy)
+                
+                if length > 0:
+                    # Normalize and get perpendicular
+                    norm_x = -dy / length
+                    norm_y = dx / length
+                    
+                    # Small curve offset
+                    curve_offset = 0.1
+                    curve_x = mid_x + norm_x * curve_offset
+                    curve_y = mid_y + norm_y * curve_offset
+                    
+                    # Draw curved line using quadratic bezier approximation
+                    t = np.linspace(0, 1, 20)
+                    curve_xs = (1-t)**2 * start[0] + 2*(1-t)*t * curve_x + t**2 * end[0]
+                    curve_ys = (1-t)**2 * start[1] + 2*(1-t)*t * curve_y + t**2 * end[1]
+                    
+                    ax.plot(curve_xs, curve_ys, color='#8B0000', linewidth=3, alpha=0.8, zorder=1)
+                else:
+                    ax.plot([start[0], end[0]], [start[1], end[1]], 
+                           color='#8B0000', linewidth=3, alpha=0.8, zorder=1)
+            else:
+                ax.plot([start[0], end[0]], [start[1], end[1]], 
+                       color='#8B0000', linewidth=3, alpha=0.8, zorder=1)
         
-        # Draw dots
+        # Draw dots with enhanced styling
         if pattern.dots:
             x_coords = [dot[0] for dot in pattern.dots]
             y_coords = [dot[1] for dot in pattern.dots]
-            ax.scatter(x_coords, y_coords, c='navy', s=120, 
-                      marker='o', zorder=3, alpha=0.9, edgecolors='white', linewidths=1)
+            
+            # Main dots
+            ax.scatter(x_coords, y_coords, c='#000080', s=200, 
+                      marker='o', zorder=3, alpha=0.9, edgecolors='white', linewidths=2)
+            
+            # Add inner highlight
+            ax.scatter(x_coords, y_coords, c='#4169E1', s=80, 
+                      marker='o', zorder=4, alpha=0.7)
         
-        # Configure plot
-        ax.set_xlim(-0.5, pattern.grid_size - 0.5)
-        ax.set_ylim(-0.5, pattern.grid_size - 0.5)
+        # Configure plot with better styling
+        ax.set_xlim(-0.8, pattern.grid_size - 0.2)
+        ax.set_ylim(-0.8, pattern.grid_size - 0.2)
         ax.set_aspect('equal')
-        ax.grid(True, alpha=0.3, linestyle='--')
-        ax.set_title(f"{title}\n{pattern.description}", fontsize=14, fontweight='bold', pad=20)
+        
+        # Enhanced grid
+        ax.grid(True, alpha=0.2, linestyle=':', color='gray')
+        
+        # Better title formatting
+        ax.set_title(f"{title}\n{pattern.description}", 
+                    fontsize=16, fontweight='bold', pad=25, 
+                    color='#2E4057')
         
         # Remove ticks for cleaner look
         ax.set_xticks([])
         ax.set_yticks([])
         
-        # Add subtle background
-        ax.set_facecolor('#fafafa')
-        
         # Invert y-axis for traditional grid layout
         ax.invert_yaxis()
         
-        # Add pattern info
-        info_text = f"Type: {pattern.pattern_type.title()} | Symmetry: {pattern.symmetry.title()} | Complexity: {pattern.complexity}/9"
-        ax.text(0.5, -0.05, info_text, transform=ax.transAxes, ha='center', 
-                fontsize=10, style='italic', color='gray')
+        # Enhanced pattern info with better formatting
+        info_text = f"Type: {pattern.pattern_type.title()} • Symmetry: {pattern.symmetry.title()} • Complexity: {pattern.complexity}/9"
+        ax.text(0.5, -0.08, info_text, transform=ax.transAxes, ha='center', 
+                fontsize=12, style='italic', color='#555555', 
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='#f0f0f0', alpha=0.8))
+        
+        # Add cultural significance
+        cultural_text = pattern.cultural_significance[:80] + "..." if len(pattern.cultural_significance) > 80 else pattern.cultural_significance
+        ax.text(0.5, -0.12, cultural_text, transform=ax.transAxes, ha='center', 
+                fontsize=10, color='#666666', style='italic')
         
         plt.tight_layout()
         return fig
@@ -560,119 +711,228 @@ def create_ai_generator_interface():
     st.title("🎨 Enhanced AI Kolam Generator")
     st.markdown("Generate mathematically precise traditional Kolam patterns using AI guidance")
     
-    # API key input
-    api_key = st.text_input("Gemini API Key (optional for AI guidance)", type="password")
+    # Initialize session state for persistent prompt management
+    if 'current_ai_prompt' not in st.session_state:
+        st.session_state.current_ai_prompt = ""
     
-    # Initialize generator
-    generator = EnhancedKolamGenerator(api_key if api_key else None)
+    # API key management
+    current_api_key = get_gemini_api_key()
+    
+    # Show API key status
+    if current_api_key:
+        st.success("✅ Gemini API Connected - AI guidance enabled")
+    else:
+        st.warning("⚠️ Gemini API not configured")
+        st.info("For enhanced AI guidance, configure your API key in Settings. Basic mathematical patterns will still work.")
+    
+    # Initialize generator with current API key
+    generator = EnhancedKolamGenerator(current_api_key)
     
     # Input section
     col1, col2 = st.columns([2, 1])
     
     with col1:
+        # Use session state for prompt persistence
         prompt = st.text_area(
             "🎨 Describe your Kolam pattern:",
+            value=st.session_state.current_ai_prompt,
             placeholder="e.g., 'Create a lotus flower with 8 petals and rotational symmetry' or 'Generate a complex star pattern with 6 points'",
-            height=100
+            height=100,
+            key="ai_prompt_input"
         )
         
+        # Update session state when prompt changes
+        if prompt != st.session_state.current_ai_prompt:
+            st.session_state.current_ai_prompt = prompt
+        
         grid_size = st.selectbox("Grid Size:", options=[5, 7, 9, 11, 13], index=1)
+        
+        # Advanced options
+        with st.expander("⚙️ Advanced Options"):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                force_pattern = st.selectbox(
+                    "Force Pattern Type (optional):",
+                    options=["Auto (AI decides)", "flower", "lotus", "star", "diamond", "spiral", "mandala", "geometric"],
+                    index=0
+                )
+            with col_b:
+                force_complexity = st.slider(
+                    "Force Complexity (optional):",
+                    min_value=1, max_value=9, value=5,
+                    help="1=Simple, 9=Very Complex"
+                )
     
     with col2:
         st.markdown("**🌟 Try these prompts:**")
         example_prompts = [
             "Simple flower with 6 petals",
-            "Complex lotus with rotational symmetry",
+            "Complex lotus with rotational symmetry", 
             "Star pattern with 8 points",
             "Diamond geometric pattern",
             "Traditional spiral design",
-            "Mandala with intricate details"
+            "Mandala with intricate details",
+            "Pulli kolam with 5x5 grid",
+            "Sikku kolam with flowing lines"
         ]
         
         for ex_prompt in example_prompts:
-            if st.button(ex_prompt, key=f"ex_{hash(ex_prompt)}"):
-                st.session_state.selected_prompt = ex_prompt
+            if st.button(ex_prompt, key=f"ex_{hash(ex_prompt)}", use_container_width=True):
+                st.session_state.current_ai_prompt = ex_prompt
                 st.rerun()
-        
-        # Use selected prompt if available
-        if 'selected_prompt' in st.session_state:
-            prompt = st.session_state.selected_prompt
     
     # Generate button
     if st.button("🚀 Generate Kolam", type="primary", disabled=not prompt.strip()):
-        with st.spinner("Creating your Kolam pattern..."):
-            result = generator.generate_kolam_from_prompt(prompt, grid_size)
+        with st.spinner("✨ Creating your Kolam pattern..."):
+            # Apply advanced options if specified
+            advanced_prompt = prompt
+            if force_pattern != "Auto (AI decides)":
+                advanced_prompt += f" (pattern type: {force_pattern})"
+            advanced_prompt += f" (complexity level: {force_complexity})"
+            
+            result = generator.generate_kolam_from_prompt(advanced_prompt, grid_size)
             
             if result.get("success"):
                 pattern = result["pattern"]
                 
-                # Visualize
+                # Visualize with enhanced styling
                 fig = generator.visualize_pattern(pattern, f"Generated from: '{prompt[:50]}...'")
                 st.pyplot(fig)
                 
-                # Display pattern information
+                # Display comprehensive pattern information
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    st.metric("Pattern Type", pattern.pattern_type.title())
+                    st.metric("🎭 Pattern Type", pattern.pattern_type.title())
                 with col2:
-                    st.metric("Symmetry", pattern.symmetry.title())
+                    st.metric("🔄 Symmetry", pattern.symmetry.title())
                 with col3:
-                    st.metric("Complexity", f"{pattern.complexity}/9")
+                    st.metric("🏆 Complexity", f"{pattern.complexity}/9")
                 with col4:
-                    st.metric("Elements", f"{len(pattern.dots)} dots, {len(pattern.connections)} lines")
+                    st.metric("🔢 Elements", f"{len(pattern.dots)} dots, {len(pattern.connections)} lines")
                 
-                # Additional information
-                with st.expander("📖 Pattern Details"):
-                    st.write(f"**Description:** {pattern.description}")
-                    st.write(f"**Cultural Significance:** {pattern.cultural_significance}")
+                # Enhanced pattern details
+                with st.expander("📚 Pattern Details & Cultural Context", expanded=True):
+                    col_detail1, col_detail2 = st.columns(2)
                     
-                    # Technical details
-                    st.json({
-                        "dots_count": len(pattern.dots),
-                        "connections_count": len(pattern.connections),
-                        "grid_size": f"{pattern.grid_size}x{pattern.grid_size}",
-                        "pattern_analysis": result.get("analysis", {})
-                    })
+                    with col_detail1:
+                        st.write(f"**🌿 Description:** {pattern.description}")
+                        st.write(f"**📜 Cultural Significance:** {pattern.cultural_significance}")
+                        
+                        # Display AI analysis if available
+                        if result.get("analysis"):
+                            analysis = result["analysis"]
+                            if analysis.get('key_elements'):
+                                st.write("**🔑 Key Elements:**")
+                                for element in analysis['key_elements']:
+                                    st.write(f"• {element}")
+                    
+                    with col_detail2:
+                        # Technical details
+                        st.json({
+                            "technical_specs": {
+                                "dots_count": len(pattern.dots),
+                                "connections_count": len(pattern.connections),
+                                "grid_size": f"{pattern.grid_size}x{pattern.grid_size}",
+                                "density": round(len(pattern.dots) / (pattern.grid_size * pattern.grid_size), 2)
+                            },
+                            "pattern_analysis": result.get("analysis", {})
+                        })
                 
-                # Export options
-                if st.button("💾 Export Pattern Data"):
-                    pattern_data = {
-                        "dots": pattern.dots,
-                        "connections": pattern.connections,
-                        "pattern_type": pattern.pattern_type,
-                        "symmetry": pattern.symmetry,
-                        "complexity": pattern.complexity,
-                        "description": pattern.description,
-                        "grid_size": pattern.grid_size
-                    }
-                    st.download_button(
-                        "📥 Download JSON",
-                        data=json.dumps(pattern_data, indent=2),
-                        file_name=f"kolam_{pattern.pattern_type}_{pattern.complexity}.json",
-                        mime="application/json"
-                    )
+                # Enhanced export options
+                st.markdown("---")
+                col_export1, col_export2, col_export3 = st.columns(3)
+                
+                with col_export1:
+                    if st.button("💾 Export Pattern Data", use_container_width=True):
+                        pattern_data = {
+                            "metadata": {
+                                "generated_from": prompt,
+                                "ai_enhanced": current_api_key is not None
+                            },
+                            "pattern": {
+                                "dots": pattern.dots,
+                                "connections": pattern.connections,
+                                "pattern_type": pattern.pattern_type,
+                                "symmetry": pattern.symmetry,
+                                "complexity": pattern.complexity,
+                                "description": pattern.description,
+                                "cultural_significance": pattern.cultural_significance,
+                                "grid_size": pattern.grid_size
+                            },
+                            "analysis": result.get("analysis", {})
+                        }
+                        st.download_button(
+                            "📁 Download JSON",
+                            data=json.dumps(pattern_data, indent=2),
+                            file_name=f"kolam_{pattern.pattern_type}_{pattern.complexity}.json",
+                            mime="application/json",
+                            use_container_width=True
+                        )
+                
+                with col_export2:
+                    if st.button("✏️ Edit in Editor", use_container_width=True):
+                        # Transfer pattern to editor
+                        st.session_state['editor_pattern'] = {
+                            'dots': pattern.dots,
+                            'connections': [{'start': conn[0], 'end': conn[1], 'type': 'line'} for conn in pattern.connections],
+                            'grid_size': pattern.grid_size,
+                            'pattern_type': pattern.pattern_type
+                        }
+                        st.success("✅ Pattern transferred to editor! Go to Interactive Editor tab.")
+                
+                with col_export3:
+                    if st.button("🔄 Generate Variation", use_container_width=True):
+                        # Generate a variation with slightly different parameters
+                        variation_prompt = prompt + " (create a variation with different details)"
+                        st.session_state.current_ai_prompt = variation_prompt
+                        st.rerun()
+            
             else:
                 st.error(f"❌ {result.get('error', 'Unknown error')}")
+                st.info("💡 Try simplifying your prompt or check your API key configuration.")
     
-    # Educational content
-    with st.expander("📚 About Kolam Patterns"):
-        st.markdown("""
-        **Traditional Kolam Art:**
-        - **Pulli Kolam**: Dot-based patterns with geometric precision
-        - **Sikku Kolam**: Continuous line patterns without lifting the hand
-        - **Kambi Kolam**: Line-based patterns with mathematical symmetry
+    # Educational content with enhanced information
+    with st.expander("📚 About Traditional Kolam Art", expanded=False):
+        tab1, tab2, tab3 = st.tabs(["🏛️ Tradition", "🔢 Mathematics", "🎨 Techniques"])
         
-        **Pattern Types:**
-        - **Floral**: Lotus, flower petals, natural forms
-        - **Geometric**: Stars, diamonds, polygons
-        - **Spiral**: Representing cosmic energy and life cycles
-        - **Mandala**: Circular patterns with spiritual significance
+        with tab1:
+            st.markdown("""
+            **Traditional Kolam Art:**
+            - **Pulli Kolam**: Dot-based patterns with geometric precision, created by connecting dots in specific ways
+            - **Sikku Kolam**: Continuous line patterns drawn without lifting the hand, representing life's continuity
+            - **Kambi Kolam**: Line-based patterns with mathematical symmetry and spiritual significance
+            
+            **Cultural Significance:**
+            - **Daily Practice**: Traditionally drawn every morning at the entrance of homes
+            - **Spiritual Meaning**: Represents prosperity, protection, and welcome to visitors
+            - **Seasonal Variations**: Different patterns for festivals and special occasions
+            """)
         
-        **Symmetry Types:**
-        - **Rotational**: Pattern looks same when rotated
-        - **Bilateral**: Mirror symmetry along axis
-        - **Radial**: Symmetry from central point
-        """)
+        with tab2:
+            st.markdown("""
+            **Mathematical Principles:**
+            - **Symmetry Types**: Rotational, bilateral, translational, and point symmetry
+            - **Geometric Patterns**: Based on circles, polygons, and recursive structures
+            - **Fractal Properties**: Many traditional patterns exhibit self-similar characteristics
+            
+            **Pattern Complexity:**
+            - **Level 1-3**: Simple symmetric patterns with basic connections
+            - **Level 4-6**: Intermediate patterns with multiple elements and curves
+            - **Level 7-9**: Complex designs with intricate details and advanced symmetry
+            """)
+        
+        with tab3:
+            st.markdown("""
+            **Drawing Techniques:**
+            - **Grid Method**: Start with a dot grid and connect according to rules
+            - **Flow Method**: Use continuous flowing lines to create organic patterns
+            - **Symmetry Method**: Build patterns using mathematical symmetry principles
+            
+            **AI Enhancement Features:**
+            - **Prompt Analysis**: AI interprets your description and suggests appropriate patterns
+            - **Cultural Context**: AI provides traditional significance and meaning
+            - **Mathematical Precision**: AI ensures proper symmetry and geometric accuracy
+            """)
 
 if __name__ == "__main__":
     create_ai_generator_interface()
