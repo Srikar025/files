@@ -5,7 +5,13 @@ import io
 import base64
 import numpy as np
 from typing import Dict, List, Tuple
-import cv2
+try:
+    import cv2
+    OPENCV_AVAILABLE = True
+except ImportError:
+    OPENCV_AVAILABLE = False
+    cv2 = None
+
 from config import GEMINI_API_KEY
 
 class KolamRecognizer:
@@ -94,58 +100,84 @@ class KolamRecognizer:
     
     def _analyze_with_opencv(self, image: Image.Image) -> Dict:
         """Perform computer vision analysis using OpenCV"""
-        # Convert PIL to OpenCV format
-        img_array = np.array(image)
-        if len(img_array.shape) == 3:
-            img_gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-        else:
-            img_gray = img_array
+        if not OPENCV_AVAILABLE:
+            return {
+                "detected_circles": 0,
+                "detected_lines": 0,
+                "symmetry_score": 0.5,
+                "image_edges": None,
+                "is_grid_based": False,
+                "error": "OpenCV not available"
+            }
         
-        # Detect circles (dots)
-        circles = cv2.HoughCircles(
-            img_gray, cv2.HOUGH_GRADIENT, 1, 20,
-            param1=50, param2=30, minRadius=5, maxRadius=50
-        )
-        
-        # Detect lines
-        edges = cv2.Canny(img_gray, 50, 150)
-        lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, minLineLength=50, maxLineGap=10)
-        
-        # Analyze symmetry
-        symmetry_score = self._calculate_symmetry_score(img_gray)
-        
-        cv_analysis = {
-            "detected_circles": len(circles[0]) if circles is not None else 0,
-            "detected_lines": len(lines) if lines is not None else 0,
-            "symmetry_score": symmetry_score,
-            "image_edges": edges,
-            "is_grid_based": circles is not None and len(circles[0]) > 4
-        }
-        
-        return cv_analysis
+        try:
+            # Convert PIL to OpenCV format
+            img_array = np.array(image)
+            if len(img_array.shape) == 3:
+                img_gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+            else:
+                img_gray = img_array
+            
+            # Detect circles (dots)
+            circles = cv2.HoughCircles(
+                img_gray, cv2.HOUGH_GRADIENT, 1, 20,
+                param1=50, param2=30, minRadius=5, maxRadius=50
+            )
+            
+            # Detect lines
+            edges = cv2.Canny(img_gray, 50, 150)
+            lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, minLineLength=50, maxLineGap=10)
+            
+            # Analyze symmetry
+            symmetry_score = self._calculate_symmetry_score(img_gray)
+            
+            cv_analysis = {
+                "detected_circles": len(circles[0]) if circles is not None else 0,
+                "detected_lines": len(lines) if lines is not None else 0,
+                "symmetry_score": symmetry_score,
+                "image_edges": edges,
+                "is_grid_based": circles is not None and len(circles[0]) > 4
+            }
+            
+            return cv_analysis
+        except Exception as e:
+            return {
+                "detected_circles": 0,
+                "detected_lines": 0,
+                "symmetry_score": 0.5,
+                "image_edges": None,
+                "is_grid_based": False,
+                "error": f"OpenCV analysis failed: {str(e)}"
+            }
     
     def _calculate_symmetry_score(self, img_gray: np.ndarray) -> float:
         """Calculate symmetry score of the image"""
-        h, w = img_gray.shape
-        center_x = w // 2
+        if not OPENCV_AVAILABLE:
+            return 0.5  # Default symmetry score if OpenCV not available
         
-        # Check vertical symmetry
-        left_half = img_gray[:, :center_x]
-        right_half = img_gray[:, center_x:]
-        
-        # Flip right half
-        right_half_flipped = cv2.flip(right_half, 1)
-        
-        # Resize to match
-        min_width = min(left_half.shape[1], right_half_flipped.shape[1])
-        left_half = left_half[:, :min_width]
-        right_half_flipped = right_half_flipped[:, :min_width]
-        
-        # Calculate similarity
-        diff = cv2.absdiff(left_half, right_half_flipped)
-        symmetry_score = 1.0 - (np.mean(diff) / 255.0)
-        
-        return max(0, min(1, symmetry_score))
+        try:
+            h, w = img_gray.shape
+            center_x = w // 2
+            
+            # Check vertical symmetry
+            left_half = img_gray[:, :center_x]
+            right_half = img_gray[:, center_x:]
+            
+            # Flip right half
+            right_half_flipped = cv2.flip(right_half, 1)
+            
+            # Resize to match
+            min_width = min(left_half.shape[1], right_half_flipped.shape[1])
+            left_half = left_half[:, :min_width]
+            right_half_flipped = right_half_flipped[:, :min_width]
+            
+            # Calculate similarity
+            diff = cv2.absdiff(left_half, right_half_flipped)
+            symmetry_score = 1.0 - (np.mean(diff) / 255.0)
+            
+            return max(0, min(1, symmetry_score))
+        except Exception:
+            return 0.5  # Default if calculation fails
     
     def classify_pattern_type(self, analysis: Dict) -> str:
         """Classify the pattern type based on analysis"""
