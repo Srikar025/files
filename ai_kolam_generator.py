@@ -236,19 +236,33 @@ def create_ai_generator_interface():
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        # Prompt input
-        default_prompt = st.session_state.get('ai_prompt', '')
+        # Prompt input - use session state to maintain prompt value
+        if 'current_ai_prompt' not in st.session_state:
+            st.session_state.current_ai_prompt = ''
+        
+        # Check if we have a new prompt from button clicks
+        if 'ai_prompt' in st.session_state:
+            st.session_state.current_ai_prompt = st.session_state.ai_prompt
+            del st.session_state.ai_prompt
+        
         prompt = st.text_area(
             "🎨 Describe your Kolam pattern:",
-            value=default_prompt,
+            value=st.session_state.current_ai_prompt,
             placeholder="e.g., 'Create a floral Kolam with 8 petals and rotational symmetry' or 'Generate a geometric diamond pattern with intricate connections'",
             height=100,
-            help="Describe the type of Kolam pattern you want. Be as specific or general as you like!"
+            help="Describe the type of Kolam pattern you want. Be as specific or general as you like!",
+            key="ai_prompt_input"
         )
         
-        # Clear session state after using it
-        if default_prompt:
-            del st.session_state.ai_prompt
+        # Update session state with current prompt value
+        st.session_state.current_ai_prompt = prompt
+        
+        # Add a clear button
+        col_clear1, col_clear2 = st.columns([1, 3])
+        with col_clear1:
+            if st.button("🗑️ Clear Prompt", help="Clear the current prompt"):
+                st.session_state.current_ai_prompt = ''
+                st.rerun()
         
         # Grid size
         grid_size = st.selectbox(
@@ -400,6 +414,8 @@ def create_ai_generator_interface():
             if st.button("🔄 Generate Another"):
                 if 'ai_generated_kolam' in st.session_state:
                     del st.session_state.ai_generated_kolam
+                # Optionally clear the current prompt for a fresh start
+                # st.session_state.current_ai_prompt = ''
                 st.rerun()
         
         with col3:
