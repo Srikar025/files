@@ -555,7 +555,7 @@ class EnhancedKolamGenerator:
         return fig
 
 # Example usage and testing
-def create_enhanced_interface():
+def create_ai_generator_interface():
     """Create the enhanced Kolam generator interface"""
     st.title("🎨 Enhanced AI Kolam Generator")
     st.markdown("Generate mathematically precise traditional Kolam patterns using AI guidance")
@@ -675,4 +675,4 @@ def create_enhanced_interface():
         """)
 
 if __name__ == "__main__":
-    create_enhanced_interface()
+    create_ai_generator_interface()
