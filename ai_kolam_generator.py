@@ -614,62 +614,83 @@ class EnhancedKolamGenerator:
         analysis['pattern_type'] = 'flower'
         return self._create_flower_template(analysis, grid_size)
     
-    def visualize_pattern(self, pattern: KolamPattern, title: str = "Generated Kolam") -> plt.Figure:
-        """Enhanced visualization of the generated Kolam pattern"""
+    def visualize_pattern(self, pattern: KolamPattern, title: str = "Generated Kolam", fill_rangoli: bool = False, color_palette: Optional[List[str]] = None) -> plt.Figure:
+        """Enhanced visualization of the generated Kolam pattern.
+        When fill_rangoli is True, uses a colorful rangoli-style rendering.
+        """
         fig, ax = plt.subplots(figsize=(12, 12))
         
         # Set background color
         ax.set_facecolor('#fefefe')
         fig.patch.set_facecolor('white')
         
+        # Choose palette
+        default_palette = ['#e53935', '#fb8c00', '#fdd835', '#43a047', '#1e88e5', '#8e24aa', '#ff4081']
+        palette = color_palette if (color_palette and len(color_palette) > 0) else default_palette
+
         # Draw connections first with better styling
-        for start, end in pattern.connections:
-            # Create slightly curved lines for more organic look
-            if len(pattern.connections) > 10:  # For complex patterns
-                # Add slight curve to lines
-                mid_x = (start[0] + end[0]) / 2
-                mid_y = (start[1] + end[1]) / 2
-                
-                # Calculate perpendicular offset for curve
-                dx = end[0] - start[0]
-                dy = end[1] - start[1]
-                length = math.sqrt(dx*dx + dy*dy)
-                
-                if length > 0:
-                    # Normalize and get perpendicular
-                    norm_x = -dy / length
-                    norm_y = dx / length
+        for idx, (start, end) in enumerate(pattern.connections):
+            if fill_rangoli:
+                # Rangoli style: bold, colorful strokes cycling through palette
+                color = palette[idx % len(palette)]
+                ax.plot([start[0], end[0]], [start[1], end[1]],
+                        color=color, linewidth=6, alpha=0.9, zorder=1)
+            else:
+                # Create slightly curved lines for more organic look
+                if len(pattern.connections) > 10:  # For complex patterns
+                    # Add slight curve to lines
+                    mid_x = (start[0] + end[0]) / 2
+                    mid_y = (start[1] + end[1]) / 2
                     
-                    # Small curve offset
-                    curve_offset = 0.1
-                    curve_x = mid_x + norm_x * curve_offset
-                    curve_y = mid_y + norm_y * curve_offset
+                    # Calculate perpendicular offset for curve
+                    dx = end[0] - start[0]
+                    dy = end[1] - start[1]
+                    length = math.sqrt(dx*dx + dy*dy)
                     
-                    # Draw curved line using quadratic bezier approximation
-                    t = np.linspace(0, 1, 20)
-                    curve_xs = (1-t)**2 * start[0] + 2*(1-t)*t * curve_x + t**2 * end[0]
-                    curve_ys = (1-t)**2 * start[1] + 2*(1-t)*t * curve_y + t**2 * end[1]
-                    
-                    ax.plot(curve_xs, curve_ys, color='#8B0000', linewidth=3, alpha=0.8, zorder=1)
+                    if length > 0:
+                        # Normalize and get perpendicular
+                        norm_x = -dy / length
+                        norm_y = dx / length
+                        
+                        # Small curve offset
+                        curve_offset = 0.1
+                        curve_x = mid_x + norm_x * curve_offset
+                        curve_y = mid_y + norm_y * curve_offset
+                        
+                        # Draw curved line using quadratic bezier approximation
+                        t = np.linspace(0, 1, 20)
+                        curve_xs = (1-t)**2 * start[0] + 2*(1-t)*t * curve_x + t**2 * end[0]
+                        curve_ys = (1-t)**2 * start[1] + 2*(1-t)*t * curve_y + t**2 * end[1]
+                        
+                        ax.plot(curve_xs, curve_ys, color='#8B0000', linewidth=3, alpha=0.8, zorder=1)
+                    else:
+                        ax.plot([start[0], end[0]], [start[1], end[1]], 
+                               color='#8B0000', linewidth=3, alpha=0.8, zorder=1)
                 else:
                     ax.plot([start[0], end[0]], [start[1], end[1]], 
                            color='#8B0000', linewidth=3, alpha=0.8, zorder=1)
-            else:
-                ax.plot([start[0], end[0]], [start[1], end[1]], 
-                       color='#8B0000', linewidth=3, alpha=0.8, zorder=1)
         
-        # Draw dots with enhanced styling
+        # Draw dots with enhanced styling (with optional rangoli fill)
         if pattern.dots:
             x_coords = [dot[0] for dot in pattern.dots]
             y_coords = [dot[1] for dot in pattern.dots]
             
-            # Main dots
-            ax.scatter(x_coords, y_coords, c='#000080', s=200, 
-                      marker='o', zorder=3, alpha=0.9, edgecolors='white', linewidths=2)
-            
-            # Add inner highlight
-            ax.scatter(x_coords, y_coords, c='#4169E1', s=80, 
-                      marker='o', zorder=4, alpha=0.7)
+            if fill_rangoli:
+                # Soft colored fills behind dots
+                colors_cycle = [palette[i % len(palette)] for i in range(len(x_coords))]
+                ax.scatter(x_coords, y_coords, c=colors_cycle, s=600, 
+                           marker='o', zorder=0, alpha=0.25, edgecolors='none')
+                # Bright centers
+                ax.scatter(x_coords, y_coords, c=colors_cycle, s=180, 
+                           marker='o', zorder=3, alpha=0.95, edgecolors='white', linewidths=2)
+            else:
+                # Main dots (default look)
+                ax.scatter(x_coords, y_coords, c='#000080', s=200, 
+                          marker='o', zorder=3, alpha=0.9, edgecolors='white', linewidths=2)
+                
+                # Add inner highlight
+                ax.scatter(x_coords, y_coords, c='#4169E1', s=80, 
+                          marker='o', zorder=4, alpha=0.7)
         
         # Configure plot with better styling
         ax.set_xlim(-0.8, pattern.grid_size - 0.2)
@@ -747,6 +768,9 @@ def create_ai_generator_interface():
         
         grid_size = st.selectbox("Grid Size:", options=[5, 7, 9, 11, 13], index=1)
         
+        # Rangoli fill option (minimal, single feature)
+        fill_rangoli = st.checkbox("🎨 Fill with colours (Rangoli style)", value=False)
+        
         # Advanced options
         with st.expander("⚙️ Advanced Options"):
             col_a, col_b = st.columns(2)
@@ -795,8 +819,23 @@ def create_ai_generator_interface():
             if result.get("success"):
                 pattern = result["pattern"]
                 
-                # Visualize with enhanced styling
-                fig = generator.visualize_pattern(pattern, f"Generated from: '{prompt[:50]}...'")
+                # Extract Gemini color suggestions if available
+                palette = None
+                analysis = result.get("analysis") or {}
+                if isinstance(analysis, dict) and analysis.get("color_suggestions"):
+                    try:
+                        # Normalize to hex or names as-is
+                        palette = [str(c) for c in analysis.get("color_suggestions", []) if c]
+                    except Exception:
+                        palette = None
+                
+                # Visualize with optional rangoli fill
+                fig = generator.visualize_pattern(
+                    pattern,
+                    f"Generated from: '{prompt[:50]}...'",
+                    fill_rangoli=fill_rangoli,
+                    color_palette=palette,
+                )
                 st.pyplot(fig)
                 
                 # Display comprehensive pattern information
