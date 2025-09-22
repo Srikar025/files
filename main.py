@@ -7,6 +7,7 @@ import io
 from kolam_generator import KolamGenerator, get_available_patterns
 from kolam_recognition import KolamRecognizer, create_analysis_visualization
 from kolam_editor import KolamEditor
+# from component import render_advanced_editor  # Lazy import inside show_editor_page
 from gemini_integration import GeminiKolamAnalyzer, display_gemini_analysis, create_learning_interface
 from ai_kolam_generator import create_ai_generator_interface
 from config import GEMINI_API_KEY, get_gemini_api_key
@@ -288,12 +289,16 @@ def show_editor_page():
     """Display the interactive editor page"""
     st.markdown('<div class="sub-header">✏️ Interactive Kolam Editor</div>', unsafe_allow_html=True)
     
-    # Initialize editor
-    if 'editor' not in st.session_state:
-        st.session_state.editor = KolamEditor()
-    
-    editor = st.session_state.editor
-    editor.create_editor_interface()
+    # Lazy import advanced editor with safe fallback
+    try:
+        from component import render_advanced_editor
+        render_advanced_editor()
+    except Exception as e:
+        st.warning("Advanced editor couldn't be loaded. Falling back to basic editor.")
+        if 'editor' not in st.session_state:
+            st.session_state.editor = KolamEditor()
+        editor = st.session_state.editor
+        editor.create_editor_interface()
 
 def show_ai_analysis_page():
     """Display the AI analysis page"""
