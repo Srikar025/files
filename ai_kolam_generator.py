@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 from PIL import Image
 import io
 import json
@@ -624,9 +625,14 @@ class EnhancedKolamGenerator:
         ax.set_facecolor('#fefefe')
         fig.patch.set_facecolor('white')
         
-        # Choose palette
+        # Choose and sanitize palette
         default_palette = ['#e53935', '#fb8c00', '#fdd835', '#43a047', '#1e88e5', '#8e24aa', '#ff4081']
-        palette = color_palette if (color_palette and len(color_palette) > 0) else default_palette
+        sanitized: List[str] = []
+        if color_palette:
+            for c in color_palette:
+                if isinstance(c, str) and mcolors.is_color_like(c):
+                    sanitized.append(c)
+        palette = sanitized if sanitized else default_palette
 
         # Draw connections first with better styling
         for idx, (start, end) in enumerate(pattern.connections):
